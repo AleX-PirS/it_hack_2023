@@ -6,9 +6,11 @@ from pytube import YouTube
 import time
 
 youtybe_reg = "https:\/\/www\.youtube\.com\/watch\?v="
-youtybe_location = "/temp"
+youtybe_location = "/temp/"
 
-max_length=100
+max_length=4000
+
+ml_model = "small"
 
 bot = telebot.TeleBot('6487666443:AAFUZhjk4nbrRMaI6G8D5_BiyXqHnoW-wqU')
 
@@ -25,29 +27,40 @@ def polling_bot():
     bot.polling()
 
 def analyse_text(message:telebot.types.Message):
-    start_time = time.localtime()
+    logging(f"Get new analyse request: username:https://t.me/{message.from_user.username}, url:{message.text}")
+    start_time = time.time()
     yt = YouTube(message.text)
-    fn = yt.streams.filter(type="audio")[0].download(youtybe_location)
 
-    model = whisper.load_model("tiny")
+    try:
+        fn = yt.streams.filter(type="audio")[0].download(youtybe_location)
+    except Exception as e:
+        bot.send_message(message.chat.id, f'Error download video: {e}')
+        return
+
+    model = whisper.load_model(ml_model)
     res = model.transcribe(fn)
+
+    print(res)
+
+    print(f'Time duration: {time.time()-start_time} for video length {yt.length} seconds. Speed={yt.length/(time.time()-start_time)}')
 
     text = res["text"]
 
     parts = []
     if len(text) <= max_length:
-        parts.append(text)
+        send_chanks(message.chat.id, [text])
     else:
         for i in range(0, len(text), max_length):
             parts.append(text[i:i + max_length])
-            print(text[i:i + max_length], '\n\n')
+            
+        send_chanks(message.chat.id, parts)
 
-    for i in parts:  
-        bot.send_message(message.chat.id, res["text"])
+def logging(mes:str):
+    print(mes)
 
-    stop_time = time.localtime()
-
-    print(f'Data about: {stop_time-start_time}')  
+def send_chanks(id, chanks):
+    for i in chanks:
+        bot.send_message(id, i)
 
 if __name__ == "__main__":
     Thread(target=polling_bot).start()
